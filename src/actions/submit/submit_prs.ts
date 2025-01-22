@@ -144,7 +144,7 @@ async function requestServerToSubmitPRs({
   const auth = context.userConfig.getFPAuthToken();
   if (!auth) {
     throw new Error(
-      'No freephite auth token found. Run `fp auth-fp -t <YOUR_GITHUB_TOKEN>` then try again.'
+      'No pancake auth token found. Run `pc auth-fp -t <YOUR_GITHUB_TOKEN>` then try again.'
     );
   }
 
@@ -155,6 +155,7 @@ async function requestServerToSubmitPRs({
 
   const prs = [];
   for (const info of submissionInfo) {
+    const baseBranchName = `mq/${info.head}`;
     if (info.action === 'create') {
       prs.push(
         await octokit.request(`POST /repos/{owner}/{repo}/pulls`, {
@@ -163,7 +164,7 @@ async function requestServerToSubmitPRs({
           title: info.title,
           body: info.body,
           head: info.head,
-          base: info.base,
+          base: baseBranchName,
           draft: info.draft,
           headers: { 'X-GitHub-Api-Version': '2022-11-28' },
         })
@@ -180,7 +181,7 @@ async function requestServerToSubmitPRs({
             pull_number: info.prNumber,
             title: info.title,
             body: info.body,
-            base: info.base,
+            base: baseBranchName,
             headers: { 'X-GitHub-Api-Version': '2022-11-28' },
           }
         )

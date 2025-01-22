@@ -53,7 +53,7 @@ export async function getPrInfoForBranches(
   const auth = userConfig.getFPAuthToken();
   if (!auth) {
     throw new Error(
-      'No freephite auth token found. Run `fp auth-fp -t <YOUR_GITHUB_TOKEN>` then try again.'
+      'No pancake auth token found. Run `fp auth-fp -t <YOUR_GITHUB_TOKEN>` then try again.'
     );
   }
 

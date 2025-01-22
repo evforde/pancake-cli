@@ -40,7 +40,7 @@ async function fetchUpgradePrompt(
       messageConfig.update(
         (data) =>
           (data.message = {
-            contents: `Current freephite version ${version} < ${latest}. To update:\nhttps://www.npmjs.com/package/@bradymadden97/freephite-cli`,
+            contents: `Current pancake version ${version} < ${latest}. To update:\nhttps://www.npmjs.com/package/@bradymadden97/freephite-cli`,
             cliVersion: version,
           })
       );

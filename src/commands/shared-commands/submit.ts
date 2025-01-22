@@ -46,7 +46,7 @@ export const args = {
     type: 'boolean',
     describe: "Don't edit PR fields inline. Takes precedence over --edit",
     demandOption: false,
-    default: false,
+    default: true,
     alias: 'n',
   },
   reviewers: {

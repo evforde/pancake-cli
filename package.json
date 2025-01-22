@@ -1,10 +1,10 @@
 {
-  "name": "@bradymadden97/freephite-cli",
+  "name": "@evforde/pancake-cli",
   "version": "0.1.6",
   "license": "None",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
-  "repository": "https://github.com/bradymadden97/freephite/tree/main/apps/cli",
+  "repository": "https://github.com/evforde/pancake-cli",
   "dependencies": {
     "@octokit/core": "^5.0.0",
     "@withgraphite/retype": "^0.3.11",
@@ -42,6 +42,7 @@
     "lint": "eslint src --quiet --ext .ts --cache",
     "check": "tsc --noEmit",
     "build": "rm -rf dist/ && bun lint && tsc && cp scripts/node_version.js dist/scripts/node_version.js && cp src/lib/gt.fish dist/src/lib/gt.fish",
+    "build-dev": "rm -rf dist/ && tsc && cp scripts/node_version.js dist/scripts/node_version.js && cp src/lib/gt.fish dist/src/lib/gt.fish",
     "build-pkg": "pkg dist/src/index.js -c package.json --public-packages \"*\"",
     "cli": "node ./dist/src/index.js"
   },
@@ -49,8 +50,8 @@
     "dist"
   ],
   "bin": {
-    "fp": "dist/src/index.js",
-    "freephite": "dist/src/index.js"
+    "pc": "dist/src/index.js",
+    "pancake": "dist/src/index.js"
   },
   "devDependencies": {
     "@types/chai": "^4.3.1",

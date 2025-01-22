@@ -27,6 +27,20 @@ turbo build
 node ~path/to/freephite/dist/src/index.js
 ```
 
+## (WIP) Install locally
+```
+nvm use
+yarn install
+yarn build
+yarn build-pkg
+npm link
+```
+
+Reinstall with
+```
+rm /Users/elliott/.nvm/versions/node/v18.18.2/bin/pc; rm /Users/elliott/.nvm/versions/node/v18.18.2/bin/pancake; yarn build-dev && yarn build-pkg && npm link
+```
+
 ## Publish
 ```
 cd ~path/to/freephite/
