@@ -17,7 +17,7 @@ export function requestWithArgs<TActualRoute extends TRoute>(
     _response: Response;
   }
 > {
-  const auth = userConfig.getAuthToken();
+  const auth = userConfig.getFPAuthToken();
 
   return request.requestWithArgs(
     userConfig.getApiServerUrl(),

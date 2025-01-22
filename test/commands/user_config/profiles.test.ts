@@ -34,26 +34,26 @@ describe('userConfigFactory', () => {
           {
             name: 'default',
             hostPrefix: 'prod',
-            authToken: '123',
+            fpAuthToken: '123',
           } as TProfile,
         ],
       },
       results: {
         apiServer: 'https://api.prod.graphite.dev/v1',
         appServer: 'https://app.prod.graphite.dev',
-        authToken: '123',
+        fpAuthToken: '123',
       },
     },
     {
       // Case with no alternative profiles.
       envVars: {},
       profile: {
-        authToken: '123',
+        fpAuthToken: '123',
       },
       results: {
         apiServer: 'https://api.graphite.dev/v1',
         appServer: 'https://app.graphite.dev',
-        authToken: '123',
+        fpAuthToken: '123',
       },
     },
     {
@@ -64,14 +64,14 @@ describe('userConfigFactory', () => {
           {
             name: 'STAGING',
             hostPrefix: 'stg',
-            authToken: '234',
+            fpAuthToken: '234',
           } as TProfile,
         ],
       },
       results: {
         apiServer: 'https://api.stg.graphite.dev/v1',
         appServer: 'https://app.stg.graphite.dev',
-        authToken: '234',
+        fpAuthToken: '234',
       },
     },
   ];
@@ -82,7 +82,7 @@ describe('userConfigFactory', () => {
       const userConfig = userConfigFactory.load(configPath);
       expect(userConfig.getApiServerUrl()).to.equal(data.results.apiServer);
       expect(userConfig.getAppServerUrl()).to.equal(data.results.appServer);
-      expect(userConfig.getAuthToken()).to.equal(data.results.authToken);
+      expect(userConfig.getFPAuthToken()).to.equal(data.results.fpAuthToken);
     });
   });
 });

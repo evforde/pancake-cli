@@ -109,10 +109,6 @@ export const userConfigFactory = spiffy({
         : DEFAULT_GRAPHITE_APP_SERVER;
     };
 
-    const getAuthToken = (): string | undefined => {
-      return getDefaultProfile().authToken;
-    };
-
     const getFPAuthToken = (): string | undefined => {
       return getDefaultProfile().fpAuthToken;
     };
@@ -148,7 +144,6 @@ export const userConfigFactory = spiffy({
       getEditor,
       getApiServerUrl,
       getAppServerUrl,
-      getAuthToken,
       getFPAuthToken,
       getPager,
       execEditor: (editFilePath: string) => {

@@ -43,7 +43,7 @@ export function ensureSomeStagedChangesPrecondition(context: TContext): void {
 }
 
 export function cliAuthPrecondition(context: TContext): string {
-  const token = context.userConfig.getAuthToken();
+  const token = context.userConfig.getFPAuthToken();
   if (!token || token.length === 0) {
     throw new PreconditionsFailedError(
       `Please authenticate your Graphite CLI by visiting ${context.userConfig.getAppServerUrl()}/activate`

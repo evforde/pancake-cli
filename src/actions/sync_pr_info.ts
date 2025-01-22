@@ -6,9 +6,11 @@ export async function syncPrInfo(
   branchNames: string[],
   context: TContext
 ): Promise<TPRInfoToUpsert> {
-  const authToken = context.userConfig.getAuthToken();
-  if (authToken === undefined) {
-    return [];
+  const authToken = context.userConfig.getFPAuthToken();
+  if (!authToken) {
+    throw new Error(
+      'No pancake auth token found. Run `pc auth-fp -t <YOUR_GITHUB_TOKEN>` then try again.'
+    );
   }
 
   const upsertInfo = await getPrInfoForBranches(

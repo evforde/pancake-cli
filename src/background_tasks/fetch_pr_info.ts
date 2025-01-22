@@ -36,7 +36,7 @@ export async function getPrInfoToUpsert({
   repoConfig: TRepoConfig;
 }): Promise<TPRInfoToUpsert> {
   const { authToken, repoName, repoOwner } = {
-    authToken: userConfig.getAuthToken(),
+    authToken: userConfig.getFPAuthToken(),
     repoName: repoConfig.getRepoName(),
     repoOwner: repoConfig.getRepoOwner(),
   };
