@@ -117,9 +117,6 @@ async function getPRAction(
   // The branch here should always have a parent - above, the branches we've
   // gathered should exclude trunk which ensures that every branch we're submitting
   // a PR for has a valid parent.
-  const parentBranchName = context.engine.getParentPrecondition(
-    args.branchName
-  );
   const prInfo = context.engine.getPrInfo(args.branchName);
   const prNumber = prInfo?.number;
 
@@ -128,14 +125,12 @@ async function getPRAction(
       ? args.updateOnly
         ? 'NOOP'
         : 'CREATE'
-      : parentBranchName !== prInfo?.base
-      ? 'RESTACK'
       : !context.engine.branchMatchesRemote(args.branchName) ||
         args.editPRFieldsInline
       ? 'CHANGE'
-      : args.draft === true && prInfo.isDraft !== true
+      : args.draft === true && prInfo?.isDraft !== true
       ? 'DRAFT'
-      : args.publish === true && prInfo.isDraft !== false
+      : args.publish === true && prInfo?.isDraft !== false
       ? 'PUBLISH'
       : 'NOOP';
 
@@ -143,7 +138,6 @@ async function getPRAction(
     {
       NOOP: `▸ ${chalk.gray(args.branchName)} (No-op)`,
       CREATE: `▸ ${chalk.cyan(args.branchName)} (Create)`,
-      RESTACK: `▸ ${chalk.cyan(args.branchName)} (New parent)`,
       CHANGE: `▸ ${chalk.cyan(args.branchName)} (Update)`,
       DRAFT: `▸ ${chalk.blueBright(args.branchName)} (Mark as draft)`,
       PUBLISH: `▸ ${chalk.blueBright(args.branchName)} (Ready for review)`,

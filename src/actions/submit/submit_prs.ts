@@ -47,7 +47,7 @@ const submitPullRequestResponse = {
         head: t.string,
         prNumber: t.number,
         prURL: t.string,
-        status: t.literals(['updated', 'created'] as const),
+        status: t.literals(['updated', 'created', 'noop'] as const),
       }),
       t.shape({
         head: t.string,
@@ -116,6 +116,7 @@ export async function submitPullRequest(
     `${chalk.green(pr.response.head)}: ${pr.response.prURL} (${{
       updated: chalk.yellow,
       created: chalk.green,
+      noop: chalk.gray,
     }[pr.response.status](pr.response.status)})`
   );
 }
@@ -157,24 +158,33 @@ async function requestServerToSubmitPRs({
   for (const info of submissionInfo) {
     const baseBranchName = `mq/${info.head}`;
     if (info.action === 'create') {
-      prs.push(
-        await octokit.request(`POST /repos/{owner}/{repo}/pulls`, {
-          owner,
-          repo,
-          title: info.title,
-          body: info.body,
-          head: info.head,
-          base: baseBranchName,
-          draft: info.draft,
-          headers: { 'X-GitHub-Api-Version': '2022-11-28' },
-        })
-      );
+      const pr = await octokit.request('POST /repos/{owner}/{repo}/pulls', {
+        owner,
+        repo,
+        title: info.title,
+        body: info.body,
+        head: info.head,
+        base: baseBranchName,
+        draft: info.draft,
+        headers: { 'X-GitHub-Api-Version': '2022-11-28' },
+      });
+      prs.push({ pr, action: 'created' });
     }
 
     if (info.action === 'update') {
-      prs.push(
-        await octokit.request(
-          `PATCH /repos/{owner}/{repo}/pulls/{pull_number}`,
+      // Maybe only do this if there is something to update
+      const existingPr = await octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+        {
+          owner,
+          repo,
+          pull_number: info.prNumber,
+        }
+      );
+      const changed = (info.title && existingPr.data.title !== info.title) || (info.body && existingPr.data.body !== info.body) || existingPr.data.base.ref !== baseBranchName;
+      if (changed) {
+        const pr = await octokit.request(
+          'PATCH /repos/{owner}/{repo}/pulls/{pull_number}',
           {
             owner,
             repo,
@@ -184,8 +194,11 @@ async function requestServerToSubmitPRs({
             base: baseBranchName,
             headers: { 'X-GitHub-Api-Version': '2022-11-28' },
           }
-        )
-      );
+        );
+        prs.push({ pr, action: 'updated' });
+      } else {
+        prs.push({ pr: existingPr, action: 'noop' });
+      };
     }
   }
 
@@ -194,15 +207,15 @@ async function requestServerToSubmitPRs({
     requests[prRequest.head] = prRequest;
   });
 
-  return prs.map((prResponse) => {
-    const request = requests[prResponse.data.head.ref];
+  return prs.map(({ pr, action }) => {
+    const request = requests[pr.data.head.ref];
     return {
       request,
       response: {
-        head: prResponse.data.head.ref,
-        status: request.action === 'create' ? 'created' : 'updated',
-        prNumber: prResponse.data.number,
-        prURL: prResponse.data.html_url,
+        head: pr.data.head.ref,
+        status: action as 'updated' | 'created' | 'noop',
+        prNumber: pr.data.number,
+        prURL: pr.data.html_url,
       },
     };
   });

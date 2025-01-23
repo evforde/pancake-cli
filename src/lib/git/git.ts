@@ -39,7 +39,7 @@ import { getUnmergedFiles, getRebaseHead } from './merge_conflict_help';
 import { pruneRemote } from './prune_remote';
 import { pullBranch } from './pull_branch';
 import { pushBranch } from './push_branch';
-import { pushHashToBranch } from './push_hash_to_branch';
+import { pushBranchAndBase } from './push_branch_and_base';
 import {
   rebase,
   rebaseContinue,
@@ -103,7 +103,7 @@ function composeGitInternal() {
     getFileContents,
     pullBranch,
     pushBranch,
-    pushHashToBranch,
+    pushBranchAndBase,
     rebaseInProgress,
     rebase,
     rebaseContinue,

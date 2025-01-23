@@ -131,9 +131,9 @@ export type TEngine = {
   branchMatchesRemote: (branchName: string) => boolean;
 
   pushBranch: (branchName: string, forcePush: boolean) => void;
-  pushHashToBranch: (
+  pushBranchAndBase: (
     branchName: string,
-    hash: string,
+    baseSha: string,
     forcePush: boolean
   ) => void;
   pullTrunk: () => 'PULL_DONE' | 'PULL_UNNEEDED' | 'PULL_CONFLICT';
@@ -917,12 +917,13 @@ export function composeEngine({
       assertBranchIsValidAndNotTrunkAndGetMeta(branchName);
       git.pushBranch({ remote, branchName, noVerify, forcePush });
     },
-    pushHashToBranch: (
+    pushBranchAndBase: (
       branchName: string,
-      hash: string,
+      baseSha: string,
       forcePush: boolean
     ) => {
-      git.pushHashToBranch({ remote, branchName, hash, noVerify, forcePush });
+      assertBranchIsValidAndNotTrunkAndGetMeta(branchName);
+      git.pushBranchAndBase({ remote, branchName, baseSha, noVerify, forcePush });
     },
     pullTrunk: () => {
       git.pruneRemote(remote);

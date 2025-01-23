@@ -72,11 +72,10 @@ export async function cleanBranches(
       },
       context
     );
+    // We concat children here (because we pop above) to make our search a DFS.
+    const children = context.engine.getChildren(branchName);
+    children.forEach((b) => branchesToProcess.push(b));
     if (shouldDelete) {
-      const children = context.engine.getChildren(branchName);
-
-      // We concat children here (because we pop above) to make our search a DFS.
-      children.forEach((b) => branchesToProcess.push(b));
 
       // Value in branchesToDelete is a list of children blocking deletion.
       branchesToDelete[branchName] = new Set(children);

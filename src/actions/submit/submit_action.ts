@@ -110,17 +110,11 @@ export async function submitAction(
   );
 
   for (const submissionInfo of submissionInfos) {
+    if (!submissionInfo.baseSha) {
+      throw new ExitFailedError('Base SHA is required');
+    }
     try {
-      context.engine.pushBranch(submissionInfo.head, args.forcePush);
-      const baseBranchName = `mq/${submissionInfo.head}`;
-      if (!submissionInfo.baseSha) {
-        throw new ExitFailedError('Base SHA is required');
-      }
-      context.engine.pushHashToBranch(
-        baseBranchName,
-        submissionInfo.baseSha,
-        args.forcePush
-      );
+      context.engine.pushBranchAndBase(submissionInfo.head, submissionInfo.baseSha, args.forcePush);
     } catch (err) {
       if (
         err instanceof CommandFailedError &&
