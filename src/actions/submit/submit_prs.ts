@@ -181,7 +181,10 @@ async function requestServerToSubmitPRs({
           pull_number: info.prNumber,
         }
       );
-      const changed = (info.title && existingPr.data.title !== info.title) || (info.body && existingPr.data.body !== info.body) || existingPr.data.base.ref !== baseBranchName;
+      const changed =
+        (info.title && existingPr.data.title !== info.title) ||
+        (info.body && existingPr.data.body !== info.body) ||
+        existingPr.data.base.ref !== baseBranchName;
       if (changed) {
         const pr = await octokit.request(
           'PATCH /repos/{owner}/{repo}/pulls/{pull_number}',
@@ -198,7 +201,7 @@ async function requestServerToSubmitPRs({
         prs.push({ pr, action: 'updated' });
       } else {
         prs.push({ pr: existingPr, action: 'noop' });
-      };
+      }
     }
   }
 

@@ -114,7 +114,11 @@ export async function submitAction(
       throw new ExitFailedError('Base SHA is required');
     }
     try {
-      context.engine.pushBranchAndBase(submissionInfo.head, submissionInfo.baseSha, args.forcePush);
+      context.engine.pushBranchAndBase(
+        submissionInfo.head,
+        submissionInfo.baseSha,
+        args.forcePush
+      );
     } catch (err) {
       if (
         err instanceof CommandFailedError &&

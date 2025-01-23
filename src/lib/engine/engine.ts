@@ -923,7 +923,13 @@ export function composeEngine({
       forcePush: boolean
     ) => {
       assertBranchIsValidAndNotTrunkAndGetMeta(branchName);
-      git.pushBranchAndBase({ remote, branchName, baseSha, noVerify, forcePush });
+      git.pushBranchAndBase({
+        remote,
+        branchName,
+        baseSha,
+        noVerify,
+        forcePush,
+      });
     },
     pullTrunk: () => {
       git.pruneRemote(remote);

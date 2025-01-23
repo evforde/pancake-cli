@@ -76,7 +76,6 @@ export async function cleanBranches(
     const children = context.engine.getChildren(branchName);
     children.forEach((b) => branchesToProcess.push(b));
     if (shouldDelete) {
-
       // Value in branchesToDelete is a list of children blocking deletion.
       branchesToDelete[branchName] = new Set(children);
       context.splog.debug(
