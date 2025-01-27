@@ -28,6 +28,7 @@ import { TScopeSpec } from './scope_spec';
 import fjsh from 'fast-json-stable-hash';
 
 export type TEngine = {
+  remote: string;
   debug: string;
   persist: () => void;
   clear: () => void;
@@ -131,9 +132,8 @@ export type TEngine = {
   branchMatchesRemote: (branchName: string) => boolean;
 
   pushBranch: (branchName: string, forcePush: boolean) => void;
-  pushBranchAndBase: (
-    branchName: string,
-    baseSha: string,
+  pushBulk: (
+    branches: { dest: string; src: string }[],
     forcePush: boolean
   ) => void;
   pullTrunk: () => 'PULL_DONE' | 'PULL_UNNEEDED' | 'PULL_CONFLICT';
@@ -431,6 +431,7 @@ export function composeEngine({
   };
 
   return {
+    remote,
     get debug() {
       return cuteString(cache);
     },
@@ -917,16 +918,20 @@ export function composeEngine({
       assertBranchIsValidAndNotTrunkAndGetMeta(branchName);
       git.pushBranch({ remote, branchName, noVerify, forcePush });
     },
-    pushBranchAndBase: (
-      branchName: string,
-      baseSha: string,
+    pushBulk: (
+      branches: { dest: string; src: string }[],
       forcePush: boolean
     ) => {
-      assertBranchIsValidAndNotTrunkAndGetMeta(branchName);
-      git.pushBranchAndBase({
+      branches.forEach((branch) => {
+        const meta = cache.branches[branch.dest];
+        if (meta) {
+          // Don't allow pushing to master
+          assertCachedMetaIsValidAndNotTrunk(branch.dest, meta);
+        }
+      });
+      git.pushBulk({
         remote,
-        branchName,
-        baseSha,
+        branches,
         noVerify,
         forcePush,
       });

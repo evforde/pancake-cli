@@ -2,9 +2,12 @@ import chalk from 'chalk';
 import { TContext } from '../../lib/context';
 import { TScopeSpec } from '../../lib/engine/scope_spec';
 import { ExitFailedError, KilledError } from '../../lib/errors';
-import { CommandFailedError } from '../../lib/git/runner';
 import { getPRInfoForBranches } from './prepare_branches';
-import { submitPullRequest } from './submit_prs';
+import {
+  requestServerToSubmitPRs,
+  submitPullRequest,
+  TPRSubmissionInfo,
+} from './submit_prs';
 import { validateBranchesToSubmit } from './validate_branches';
 import { Octokit } from '@octokit/core';
 import { type PR, StackCommentBody } from './comment_body';
@@ -109,43 +112,60 @@ export async function submitAction(
     chalk.blueBright('📨 Pushing to remote and creating/updating PRs...')
   );
 
-  for (const submissionInfo of submissionInfos) {
-    if (!submissionInfo.baseSha) {
+  await preparePrsForUpdate(submissionInfos, context, args);
+
+  // Delete the old base branches and recreate them with the new refs.
+  const branchesToDelete = submissionInfos.flatMap((info) => [
+    { src: '', dest: remoteDest(baseBranchName(info.head)) },
+  ]);
+  context.engine.pushBulk(branchesToDelete, args.forcePush);
+  const branchesToRecreate = submissionInfos.flatMap((info) => {
+    if (!info.headSha) {
+      throw new ExitFailedError('Head SHA is required');
+    }
+    if (!info.baseSha) {
       throw new ExitFailedError('Base SHA is required');
     }
-    try {
-      context.engine.pushBranchAndBase(
-        submissionInfo.head,
-        submissionInfo.baseSha,
-        args.forcePush
-      );
-    } catch (err) {
-      if (
-        err instanceof CommandFailedError &&
-        err.message.includes('stale info')
-      ) {
-        throw new ExitFailedError(
-          [
-            `Force-with-lease push of ${chalk.yellow(
-              submissionInfo.head
-            )} failed due to external changes to the remote branch.`,
-            'If you are collaborating on this stack, try `fp downstack get` to pull in changes.',
-            'Alternatively, use the `--force` option of this command to bypass the stale info warning.',
-          ].join('\n')
-        );
-      }
-      throw err;
-    }
+    return [
+      { src: info.headSha, dest: remoteDest(info.head) },
+      { src: info.baseSha, dest: remoteDest(baseBranchName(info.head)) },
+      // For any existing PRs, we also update the temporary base branches at the same time as we update the PRs'
+      // head branches. This ensures that the PRs always contains only the desired diffs and no unrelated commits.
+      { src: info.baseSha, dest: remoteDest(tempBaseBranchName(info.head)) },
+    ];
+  });
+  context.engine.pushBulk(branchesToRecreate, args.forcePush);
 
-    await submitPullRequest(
-      {
-        submissionInfo: [submissionInfo],
-        mergeWhenReady: args.mergeWhenReady,
-        trunkBranchName: context.engine.trunk,
-      },
-      context
-    );
+  // Update or create PRs using the real base branches
+  // TODO: do this in batch
+  for (const submissionInfo of submissionInfos) {
+    await submitPullRequest(submissionInfo, context);
   }
+
+  // Delete the temporary branches
+  const tempBranchesToDelete = submissionInfos.flatMap((info) => [
+    { src: '', dest: remoteDest(tempBaseBranchName(info.head)) },
+  ]);
+  context.engine.pushBulk(tempBranchesToDelete, args.forcePush);
+
+  // TODO: this new technique will not error if the remote has new changes.
+  // We should fetch the remote and error if the remote sha is any different
+  // than the local sha. Basically, we have to reimplement --force-with-lease
+  // Maybe we can just error when we delete the old branches????
+  // if (
+  //   err instanceof CommandFailedError &&
+  //   err.message.includes('stale info')
+  // ) {
+  //   throw new ExitFailedError(
+  //     [
+  //       `Force-with-lease push of ${chalk.yellow(
+  //         submissionInfo.head
+  //       )} failed due to external changes to the remote branch.`,
+  //       'If you are collaborating on this stack, try `fp downstack get` to pull in changes.',
+  //       'Alternatively, use the `--force` option of this command to bypass the stale info warning.',
+  //     ].join('\n')
+  //   );
+  // }
 
   const auth = context.userConfig.getFPAuthToken();
   if (!auth) {
@@ -221,6 +241,51 @@ export async function submitAction(
   if (!context.interactive) {
     return;
   }
+}
+
+const baseBranchName = (branchName: string) => `mq/${branchName}`;
+const tempBaseBranchName = (branchName: string) => `temp-mq/${branchName}`;
+const remoteDest = (branchName: string) => `refs/heads/${branchName}`;
+
+/** Since the `mq/***` branches have branch protection rules that prevent updates without a PR, we have to
+go through a little roundabout process: we have to delete the old branches and recreate them to point
+to the new desired refs. But we also have to take care to not accidentally close the PRs while we do this */
+async function preparePrsForUpdate(
+  submissionInfos: TPRSubmissionInfo,
+  context: TContext,
+  args: { forcePush: boolean }
+): Promise<void> {
+  const prsToUpdate = submissionInfos.filter(
+    (info) => info.action === 'update'
+  );
+  if (prsToUpdate.length === 0) {
+    return;
+  }
+
+  // First, create a temporary branch that is identical to the current base of the PR
+  const tempBranchesToDelete = prsToUpdate.map((info) => ({
+    src: '',
+    dest: remoteDest(tempBaseBranchName(info.head)),
+  }));
+  context.engine.pushBulk(tempBranchesToDelete, args.forcePush);
+
+  const tempBranchesToPush = prsToUpdate.map((info) => ({
+    src: `${context.engine.remote}/${baseBranchName(info.head)}`,
+    dest: remoteDest(tempBaseBranchName(info.head)),
+  }));
+  context.engine.pushBulk(tempBranchesToPush, args.forcePush);
+
+  // Then, update all existing PRs' base to point to the new temporary branch
+  const submissionInfosWithTempBranches = prsToUpdate
+    .filter((info) => info.action === 'update')
+    .map((info) => ({
+      ...info,
+      base: tempBaseBranchName(info.head),
+    }));
+  await requestServerToSubmitPRs({
+    submissionInfo: submissionInfosWithTempBranches,
+    context,
+  });
 }
 
 async function selectBranches(

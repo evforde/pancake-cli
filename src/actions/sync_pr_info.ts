@@ -42,9 +42,10 @@ export function upsertPrInfoForBranches(
       body: pr.body,
       state: pr.state,
       reviewDecision: pr.reviewDecision ?? undefined,
-      base: pr.baseRefName,
       url: pr.url,
       isDraft: pr.isDraft,
+      // Don't update the base of the PR from the github info since the base branch is different from the PR's
+      // parent branch.
     })
   );
 }

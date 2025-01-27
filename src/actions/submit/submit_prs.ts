@@ -74,18 +74,18 @@ type TSubmittedPR = {
 };
 
 export async function submitPullRequest(
-  args: {
-    submissionInfo: TPRSubmissionInfo;
-    mergeWhenReady: boolean;
-    trunkBranchName: string;
-  },
+  submissionInfo: TPRSubmissionInfo[0],
   context: TContext
 ): Promise<void> {
+  // The `base` branch of the prInfo identifies the parent upon which this PR depends.
+  // But the base branch we submit for the PR is always an `mq/***` branch.
+  const prInfoToSubmit = {
+    ...submissionInfo,
+    base: `mq/${submissionInfo.head}`,
+  };
   const pr = (
     await requestServerToSubmitPRs({
-      submissionInfo: args.submissionInfo,
-      mergeWhenReady: args.mergeWhenReady,
-      trunkBranchName: args.trunkBranchName,
+      submissionInfo: [prInfoToSubmit],
       context,
     })
   )[0];
@@ -101,16 +101,18 @@ export async function submitPullRequest(
   context.engine.upsertPrInfo(pr.response.head, {
     number: pr.response.prNumber,
     url: pr.response.prURL,
-    base: pr.request.base,
+    base: submissionInfo.base,
     state: 'OPEN', // We know this is not closed or merged because submit succeeded
-    ...(pr.request.action === 'create'
+    ...(submissionInfo.action === 'create'
       ? {
-          title: pr.request.title,
-          body: pr.request.body,
+          title: submissionInfo.title,
+          body: submissionInfo.body,
           reviewDecision: 'REVIEW_REQUIRED', // Because we just opened this PR
         }
       : {}),
-    ...(pr.request.draft !== undefined ? { draft: pr.request.draft } : {}),
+    ...(submissionInfo.draft !== undefined
+      ? { draft: submissionInfo.draft }
+      : {}),
   });
   context.splog.info(
     `${chalk.green(pr.response.head)}: ${pr.response.prURL} (${{
@@ -131,15 +133,11 @@ function parseSubmitError(error: string): string {
 
 // This endpoint is plural for legacy reasons.
 // Leaving the function plural in case we want to revert.
-async function requestServerToSubmitPRs({
+export async function requestServerToSubmitPRs({
   submissionInfo,
-  mergeWhenReady: __mergeWhenReady,
-  trunkBranchName: __trunkBranchName,
   context,
 }: {
   submissionInfo: TPRSubmissionInfo;
-  mergeWhenReady: boolean;
-  trunkBranchName: string;
   context: TContext;
 }): Promise<TSubmittedPR[]> {
   const auth = context.userConfig.getFPAuthToken();
@@ -156,7 +154,6 @@ async function requestServerToSubmitPRs({
 
   const prs = [];
   for (const info of submissionInfo) {
-    const baseBranchName = `mq/${info.head}`;
     if (info.action === 'create') {
       const pr = await octokit.request('POST /repos/{owner}/{repo}/pulls', {
         owner,
@@ -164,7 +161,7 @@ async function requestServerToSubmitPRs({
         title: info.title,
         body: info.body,
         head: info.head,
-        base: baseBranchName,
+        base: info.base,
         draft: info.draft,
         headers: { 'X-GitHub-Api-Version': '2022-11-28' },
       });
@@ -172,7 +169,6 @@ async function requestServerToSubmitPRs({
     }
 
     if (info.action === 'update') {
-      // Maybe only do this if there is something to update
       const existingPr = await octokit.request(
         'GET /repos/{owner}/{repo}/pulls/{pull_number}',
         {
@@ -184,7 +180,7 @@ async function requestServerToSubmitPRs({
       const changed =
         (info.title && existingPr.data.title !== info.title) ||
         (info.body && existingPr.data.body !== info.body) ||
-        existingPr.data.base.ref !== baseBranchName;
+        existingPr.data.base.ref !== info.base;
       if (changed) {
         const pr = await octokit.request(
           'PATCH /repos/{owner}/{repo}/pulls/{pull_number}',
@@ -194,7 +190,7 @@ async function requestServerToSubmitPRs({
             pull_number: info.prNumber,
             title: info.title,
             body: info.body,
-            base: baseBranchName,
+            base: info.base,
             headers: { 'X-GitHub-Api-Version': '2022-11-28' },
           }
         );
