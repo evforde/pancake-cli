@@ -11,6 +11,7 @@ import {
 import { validateBranchesToSubmit } from './validate_branches';
 import { Octokit } from '@octokit/core';
 import { type PR, StackCommentBody } from './comment_body';
+import { CommandFailedError } from '../../lib/git/runner';
 
 // eslint-disable-next-line max-lines-per-function
 export async function submitAction(
@@ -114,11 +115,15 @@ export async function submitAction(
 
   await preparePrsForUpdate(submissionInfos, context, args);
 
-  // Delete the old base branches and recreate them with the new refs.
+  // Now that existing PRs aren't pointing to the base branches, delete the old base branches and recreate them.
+  // We cannot push directly to the base branches because of branch protection rules on the base branches.
   const branchesToDelete = submissionInfos.flatMap((info) => [
     { src: '', dest: remoteDest(baseBranchName(info.head)) },
   ]);
-  context.engine.pushBulk(branchesToDelete, args.forcePush);
+  context.engine.pushBulk({
+    branches: branchesToDelete,
+    forcePush: args.forcePush,
+  });
   const branchesToRecreate = submissionInfos.flatMap((info) => {
     if (!info.headSha) {
       throw new ExitFailedError('Head SHA is required');
@@ -134,7 +139,10 @@ export async function submitAction(
       { src: info.baseSha, dest: remoteDest(tempBaseBranchName(info.head)) },
     ];
   });
-  context.engine.pushBulk(branchesToRecreate, args.forcePush);
+  context.engine.pushBulk({
+    branches: branchesToRecreate,
+    forcePush: args.forcePush,
+  });
 
   // Update or create PRs using the real base branches
   // TODO: do this in batch
@@ -146,26 +154,10 @@ export async function submitAction(
   const tempBranchesToDelete = submissionInfos.flatMap((info) => [
     { src: '', dest: remoteDest(tempBaseBranchName(info.head)) },
   ]);
-  context.engine.pushBulk(tempBranchesToDelete, args.forcePush);
-
-  // TODO: this new technique will not error if the remote has new changes.
-  // We should fetch the remote and error if the remote sha is any different
-  // than the local sha. Basically, we have to reimplement --force-with-lease
-  // Maybe we can just error when we delete the old branches????
-  // if (
-  //   err instanceof CommandFailedError &&
-  //   err.message.includes('stale info')
-  // ) {
-  //   throw new ExitFailedError(
-  //     [
-  //       `Force-with-lease push of ${chalk.yellow(
-  //         submissionInfo.head
-  //       )} failed due to external changes to the remote branch.`,
-  //       'If you are collaborating on this stack, try `fp downstack get` to pull in changes.',
-  //       'Alternatively, use the `--force` option of this command to bypass the stale info warning.',
-  //     ].join('\n')
-  //   );
-  // }
+  context.engine.pushBulk({
+    branches: tempBranchesToDelete,
+    forcePush: args.forcePush,
+  });
 
   await commentStackOnPrs(branchNames, context);
 
@@ -270,18 +262,56 @@ async function preparePrsForUpdate(
     return;
   }
 
+  // Verify that there aren't incompatible changes on the remote
+  const dryRunHeads = prsToUpdate.map((info) => {
+    if (!info.headSha) {
+      throw new ExitFailedError('Head SHA is required');
+    }
+    return {
+      src: info.headSha,
+      dest: remoteDest(info.head),
+    };
+  });
+  try {
+    context.engine.pushBulk({
+      branches: dryRunHeads,
+      dryRun: true,
+      forcePush: args.forcePush,
+    });
+  } catch (err) {
+    if (
+      err instanceof CommandFailedError &&
+      err.message.includes('stale info')
+    ) {
+      throw new ExitFailedError(
+        [
+          'Force-with-lease push of branch failed due to external changes to the remote branch.',
+          'Collaborating on stacks is not well supported in pancake. You can attempt to manually pull in changes from the remote, but proceed with caution.',
+          'Alternatively, use the `--force` option of this command to bypass the stale info warning.',
+        ].join('\n')
+      );
+    }
+    throw err;
+  }
+
   // First, create a temporary branch that is identical to the current base of the PR
   const tempBranchesToDelete = prsToUpdate.map((info) => ({
     src: '',
     dest: remoteDest(tempBaseBranchName(info.head)),
   }));
-  context.engine.pushBulk(tempBranchesToDelete, args.forcePush);
+  context.engine.pushBulk({
+    branches: tempBranchesToDelete,
+    forcePush: args.forcePush,
+  });
 
   const tempBranchesToPush = prsToUpdate.map((info) => ({
     src: `${context.engine.remote}/${baseBranchName(info.head)}`,
     dest: remoteDest(tempBaseBranchName(info.head)),
   }));
-  context.engine.pushBulk(tempBranchesToPush, args.forcePush);
+  context.engine.pushBulk({
+    branches: tempBranchesToPush,
+    forcePush: args.forcePush,
+  });
 
   // Then, update all existing PRs' base to point to the new temporary branch
   const submissionInfosWithTempBranches = prsToUpdate

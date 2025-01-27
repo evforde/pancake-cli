@@ -132,10 +132,15 @@ export type TEngine = {
   branchMatchesRemote: (branchName: string) => boolean;
 
   pushBranch: (branchName: string, forcePush: boolean) => void;
-  pushBulk: (
-    branches: { dest: string; src: string }[],
-    forcePush: boolean
-  ) => void;
+  pushBulk: ({
+    branches,
+    dryRun,
+    forcePush,
+  }: {
+    branches: { dest: string; src: string }[];
+    dryRun?: boolean;
+    forcePush: boolean;
+  }) => void;
   pullTrunk: () => 'PULL_DONE' | 'PULL_UNNEEDED' | 'PULL_CONFLICT';
   hardReset: (sha?: string) => void;
   resetTrunkToRemote: () => void;
@@ -918,10 +923,15 @@ export function composeEngine({
       assertBranchIsValidAndNotTrunkAndGetMeta(branchName);
       git.pushBranch({ remote, branchName, noVerify, forcePush });
     },
-    pushBulk: (
-      branches: { dest: string; src: string }[],
-      forcePush: boolean
-    ) => {
+    pushBulk: ({
+      branches,
+      dryRun,
+      forcePush,
+    }: {
+      branches: { dest: string; src: string }[];
+      dryRun?: boolean;
+      forcePush: boolean;
+    }) => {
       branches.forEach((branch) => {
         const meta = cache.branches[branch.dest];
         if (meta) {
@@ -933,6 +943,7 @@ export function composeEngine({
         remote,
         branches,
         noVerify,
+        dryRun,
         forcePush,
       });
     },

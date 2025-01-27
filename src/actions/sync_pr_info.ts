@@ -46,6 +46,7 @@ export function upsertPrInfoForBranches(
       isDraft: pr.isDraft,
       // Don't update the base of the PR from the github info since the base branch is different from the PR's
       // parent branch.
+      // TODO: this is a little bit fickle. We should do a larger refactor to track `parent` separately from `base`.
     })
   );
 }
