@@ -167,6 +167,18 @@ export async function submitAction(
   //   );
   // }
 
+  await commentStackOnPrs(branchNames, context);
+
+  if (!context.interactive) {
+    return;
+  }
+}
+
+/** Write a comment on each PR in the stack that explains the topology of the stack. */
+async function commentStackOnPrs(
+  branchNames: Array<string>,
+  context: TContext
+) {
   const auth = context.userConfig.getFPAuthToken();
   if (!auth) {
     throw new Error(
@@ -236,10 +248,6 @@ export async function submitAction(
         }
       );
     }
-  }
-
-  if (!context.interactive) {
-    return;
   }
 }
 
