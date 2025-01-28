@@ -1,156 +1,75 @@
 import { TContext } from '../../lib/context';
 import { TBranchPRInfo } from '../../lib/engine/metadata_ref';
 
-export interface PR extends Required<Pick<TBranchPRInfo, 'number' | 'base'>> {
-  ref: string;
-}
+export function generateStackComment(
+  context: TContext,
+  forBranchName: string
+): string {
+  const lines = [];
+  const trunk = context.engine.trunk;
 
-type Ref = PR['ref'];
-type Trunk = TContext['engine']['trunk'];
-type Tree = Record<Ref | Trunk, Array<PR | Pick<PR, 'base' | 'ref'>>>;
-type Reverse = Record<Ref, Ref | Trunk>;
+  const owner = context.repoConfig.getRepoOwner();
+  const repo = context.repoConfig.getRepoName();
+  const forPr = context.engine.getPrInfo(forBranchName);
 
-abstract class StackCommentBodyBase {
-  protected tree: Tree;
-  protected reverse: Reverse;
-  protected prsByBranchName: Record<Ref, PR | Pick<PR, 'base' | 'ref'>>;
-  protected constructor(protected context: TContext, prs: Array<PR>) {
-    this.tree = { [context.engine.trunk]: [] };
-    this.reverse = {};
-    this.prsByBranchName = {};
-
-    // Populate tree with PR info
-    for (const pr of prs) {
-      this.addBranchToTree(pr);
+  const buildChildPrLink = (pr: TBranchPRInfo) => {
+    return `[#${pr.number}](https://github.com/${owner}/${repo}/pull/${pr.number}) <a href="https://app.graphite.dev/github/pr/${owner}/${repo}/${pr.number}" target="_self"><img src="https://static.graphite.dev/graphite-32x32-black.png" alt="Graphite" width="10px" height="10px"/></a>`;
+  };
+  const buildLine = (branchName: string) => {
+    const pr = context.engine.getPrInfo(branchName);
+    if (!pr) {
+      return `Branch _${branchName}_`;
     }
 
-    // Fill the remaining path to trunk if necessary
-    for (const base of Object.keys(this.tree)) {
-      this.findRouteToTrunk(base);
-    }
-  }
-
-  private addBranchToTree(pr: PR | Pick<PR, 'base' | 'ref'>) {
-    const deps = this.tree[pr.base];
-    this.tree[pr.base] = deps ? [...deps, pr] : [pr];
-    this.tree[pr.ref] = this.tree[pr.ref] ?? [];
-    this.reverse[pr.ref] = pr.base;
-    this.prsByBranchName[pr.ref] = pr;
-  }
-
-  private findRouteToTrunk(base: string): void {
-    if (base === this.context.engine.trunk) {
-      return;
-    }
-
-    if (base in this.reverse) {
-      this.findRouteToTrunk(this.reverse[base]);
-      return;
-    }
-
-    const pr = this.context.engine.getPrInfo(base);
-
-    // Add PR to tree and continue iterating to trunk
-    if (pr && pr.base && pr.number) {
-      this.addBranchToTree({
-        base: pr.base,
-        number: pr.number,
-        ref: base,
-      });
-
-      this.findRouteToTrunk(this.reverse[base]);
-      return;
-    }
-
-    // If we don't have a PR, look up general branch info
-    const parent = this.context.engine.getParent(base);
-    if (parent) {
-      this.addBranchToTree({ base: parent, ref: base });
-
-      this.findRouteToTrunk(this.reverse[base]);
-      return;
-    }
-  }
-
-  protected buildTreeComment(currentPr: PR): string[] {
-    const lines = [];
-    const trunk = this.context.engine.trunk;
-
-    const owner = this.context.repoConfig.getRepoOwner();
-    const repo = this.context.repoConfig.getRepoName();
-
-    const buildShortLine = (pr: PR | Pick<PR, 'base' | 'ref'>) => {
-      if ('number' in pr) {
-        return `[#${pr.number}](https://github.com/${owner}/${repo}/pull/${pr.number}) <a href="https://app.graphite.dev/github/pr/${owner}/${repo}/${pr.number}?utm_source=stack-comment-icon" target="_blank"><img src="https://static.graphite.dev/graphite-32x32-black.png" alt="Graphite" width="10px" height="10px"/></a>`;
+    const children = context.engine.getChildren(branchName);
+    let line = `**#${pr.number}** <a href="https://app.graphite.dev/github/pr/${owner}/${repo}/${pr.number}" target="_self"><img src="https://static.graphite.dev/graphite-32x32-black.png" alt="Graphite" width="10px" height="10px"/></a>`;
+    if (children.length > 1) {
+      // If multiple children, add a line for all the children and stop traversing the tree.
+      const isBuildingForChild = children.includes(forBranchName);
+      const childrenPrs = children
+        .filter((branchName) => forBranchName !== branchName)
+        .map((branchName) => {
+          const pr = context.engine.getPrInfo(branchName);
+          if (!pr) {
+            return `Branch _${branchName}_`;
+          }
+          return buildChildPrLink(pr);
+        });
+      if (isBuildingForChild) {
+        line += ` Other dependent PRs: (${childrenPrs.join(', ')})`;
+      } else {
+        line += ` Dependent PRs: (${childrenPrs.join(', ')})`;
       }
-      return `Branch _${pr.ref}_`;
-    };
-    const buildLine = (
-      pr: PR | Pick<PR, 'base' | 'ref'>,
-      children: Array<PR | Pick<PR, 'base' | 'ref'>>
-    ) => {
-      if ('number' in pr) {
-        let line = `**#${pr.number}** <a href="https://app.graphite.dev/github/pr/${owner}/${repo}/${pr.number}?utm_source=stack-comment-icon" target="_blank"><img src="https://static.graphite.dev/graphite-32x32-black.png" alt="Graphite" width="10px" height="10px"/></a>`;
-        if (children.length > 1) {
-          // If multiple children, add a line for all the children and stop traversing the tree.
-          line += ` Dependent PRs: (${children
-            .map((pr) => buildShortLine(pr))
-            .join(', ')})`;
-        }
-        if (currentPr?.number === pr.number) {
-          line += ' 👈';
-        }
-        return line;
-      }
-      return `Branch _${pr.ref}_`;
-    };
-
-    // Explore up the tree from the current PR
-    let current: PR | Pick<PR, 'base' | 'ref'> = currentPr;
-    while (current) {
-      const children: Array<PR | Pick<PR, 'base' | 'ref'>> =
-        this.tree[current.ref];
-      lines.unshift(buildLine(current, children));
-      if (children.length > 1) {
-        // If multiple children, stop traversing the tree since we don't know which branch to follow.
-        break;
-      }
-      current = children[0];
     }
-
-    // Explore down the tree from the current PR to the trunk branch
-    let currentRef = this.reverse[currentPr.ref];
-    while (currentRef !== trunk) {
-      const pr: PR | Pick<PR, 'base' | 'ref'> =
-        this.prsByBranchName[currentRef];
-      const childrenOfPr: Array<PR | Pick<PR, 'base' | 'ref'>> =
-        this.tree[currentRef];
-      lines.push(buildLine(pr, childrenOfPr));
-      currentRef = this.reverse[currentRef];
+    if (forPr?.number === pr.number) {
+      line += ' 👈';
     }
-    lines.push(`\`${trunk}\``);
+    return line;
+  };
 
-    return [
-      ...lines.map((l) => `* ${l}`),
-      '',
-      'This comment was autogenerated by Pancake.',
-    ];
-  }
-}
-
-/**
- * External API for generating a comment from a PR stack
- *
- * const body = StackCommentBody.generate(context: TContext, prs: Array<PR>)
- * const withPointer = body.forPR(pr: PR);
- *
- */
-export class StackCommentBody extends StackCommentBodyBase {
-  public static generate(context: TContext, prs: Array<PR>): StackCommentBody {
-    return new this(context, prs);
+  // Explore up the tree from the current PR
+  let currentBranchName: string | undefined = forBranchName;
+  while (currentBranchName) {
+    const children = context.engine.getChildren(currentBranchName);
+    lines.unshift(buildLine(currentBranchName));
+    if (children.length > 1) {
+      // If multiple children, stop traversing the tree since we don't know which branch to follow.
+      break;
+    }
+    currentBranchName = children[0];
   }
 
-  public forPR(pr: PR): string {
-    return this.buildTreeComment(pr).join('\n');
+  // Explore down the tree from the current PR to the trunk branch
+  currentBranchName = context.engine.getParent(forBranchName);
+  while (currentBranchName && currentBranchName !== trunk) {
+    lines.push(buildLine(currentBranchName));
+    currentBranchName = context.engine.getParent(currentBranchName);
   }
+  lines.push(`\`${trunk}\``);
+
+  return [
+    ...lines.map((l) => `* ${l}`),
+    '',
+    'This comment was autogenerated by Pancake.',
+  ].join('\n');
 }

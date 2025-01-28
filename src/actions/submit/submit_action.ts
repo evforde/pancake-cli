@@ -10,7 +10,7 @@ import {
 } from './submit_prs';
 import { validateBranchesToSubmit } from './validate_branches';
 import { Octokit } from '@octokit/core';
-import { type PR, StackCommentBody } from './comment_body';
+import { generateStackComment } from './comment_body';
 import { CommandFailedError } from '../../lib/git/runner';
 
 // eslint-disable-next-line max-lines-per-function
@@ -73,7 +73,7 @@ export async function submitAction(
 
   context.splog.info(
     chalk.blueBright(
-      `🥞 Validating that this Pancake stack is ready to submit...`
+      '🥞 Validating that this Pancake stack is ready to submit...'
     )
   );
   context.splog.newline();
@@ -179,24 +179,14 @@ async function commentStackOnPrs(
   }
 
   const octokit = new Octokit({ auth });
-
-  const prs: Array<PR> = [];
-  for (const branchName of branchNames) {
-    const info = context.engine.getPrInfo(branchName);
-    if (info?.number && info?.base) {
-      prs.push({
-        base: info.base,
-        number: info.number,
-        ref: branchName,
-      });
-    }
-  }
-
-  const comment = StackCommentBody.generate(context, prs);
   const owner = context.repoConfig.getRepoOwner();
   const repo = context.repoConfig.getRepoName();
 
-  for (const pr of prs) {
+  for (const branchName of branchNames) {
+    const pr = context.engine.getPrInfo(branchName);
+    if (!pr?.number) {
+      continue;
+    }
     const existing = await octokit.request(
       'GET /repos/{owner}/{repo}/issues/{issue_number}/comments',
       {
@@ -220,7 +210,7 @@ async function commentStackOnPrs(
           owner,
           repo,
           comment_id: update.id,
-          body: comment.forPR(pr),
+          body: generateStackComment(context, branchName),
           headers: {
             'X-GitHub-Api-Version': '2022-11-28',
           },
@@ -233,7 +223,7 @@ async function commentStackOnPrs(
           owner,
           repo,
           issue_number: pr.number,
-          body: comment.forPR(pr),
+          body: generateStackComment(context, branchName),
           headers: {
             'X-GitHub-Api-Version': '2022-11-28',
           },
