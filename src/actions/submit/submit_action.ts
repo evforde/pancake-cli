@@ -159,7 +159,7 @@ export async function submitAction(
     forcePush: args.forcePush,
   });
 
-  await commentStackOnPrs(branchNames, context);
+  await commentStackOnPrs(allBranchNames, context);
 
   if (!context.interactive) {
     return;
